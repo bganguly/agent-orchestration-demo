@@ -2,14 +2,31 @@ import json
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
+from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
 from app.agents.graph import graph, SPECIALISTS, SYNTHESIS_DOMAINS
+from app.config import settings
 
 router = APIRouter()
 
 HIDDEN_NODES = {"collect"}
 KNOWN_NODES = {"plan", "research", "collect", "synthesize", "fact_check", "write"}
+
+
+def _make_llm(provider: str):
+    if provider == "openai":
+        return ChatOpenAI(
+            model="gpt-4o-mini",
+            openai_api_key=settings.openai_api_key,
+            max_tokens=1024,
+        )
+    return ChatAnthropic(
+        model="claude-3-5-haiku-20241022",
+        anthropic_api_key=settings.anthropic_api_key,
+        max_tokens=1024,
+    )
 
 
 def _sse(payload: dict) -> str:
@@ -18,10 +35,13 @@ def _sse(payload: dict) -> str:
 
 class RunRequest(BaseModel):
     query: str
+    provider: str = "anthropic"
 
 
 @router.post("/agent/run")
 async def run_agent(req: RunRequest) -> StreamingResponse:
+    llm = _make_llm(req.provider)
+
     async def event_stream():
         state = {
             "query": req.query,
@@ -34,8 +54,9 @@ async def run_agent(req: RunRequest) -> StreamingResponse:
             "answer": "",
             "steps": [],
         }
+        config = {"configurable": {"llm": llm}}
 
-        async for event in graph.astream_events(state, version="v2"):
+        async for event in graph.astream_events(state, config=config, version="v2"):
             kind = event.get("event")
             name = event.get("name", "")
 

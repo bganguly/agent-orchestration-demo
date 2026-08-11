@@ -11,20 +11,13 @@ import json
 import operator
 from typing import Annotated, Any
 
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 from langgraph.types import Send
 from typing_extensions import TypedDict
 
 from app.agents.tools import wikipedia_search, duckduckgo_search
-from app.config import settings
-
-_llm = ChatAnthropic(
-    model="claude-3-5-haiku-20241022",
-    anthropic_api_key=settings.anthropic_api_key,
-    max_tokens=1024,
-)
 
 SPECIALISTS: dict[str, str] = {
     "clinical":     "Clinical & Medical",
@@ -79,9 +72,13 @@ class AgentState(TypedDict):
     steps: Annotated[list[dict], operator.add]
 
 
+def _llm(config: RunnableConfig):
+    return config["configurable"]["llm"]
+
+
 # ── plan ──────────────────────────────────────────────────────────
 
-async def plan_node(state: AgentState) -> dict:
+async def plan_node(state: AgentState, config: RunnableConfig) -> dict:
     prompt = f"""Analyze this research query and respond with JSON only.
 
 Query: {state['query']}
@@ -94,7 +91,7 @@ Select the most relevant specialist types from: {list(SPECIALISTS.keys())}
 Respond with ONLY valid JSON — no markdown, no explanation:
 {{"complexity": "simple", "specialists": ["specialist1", "specialist2"]}}"""
 
-    resp = await _llm.ainvoke([HumanMessage(content=prompt)])
+    resp = await _llm(config).ainvoke([HumanMessage(content=prompt)])
     try:
         raw = resp.content.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
         data = json.loads(raw)
@@ -127,7 +124,7 @@ def route_after_plan(state: AgentState):
 
 # ── research ──────────────────────────────────────────────────────
 
-async def research_node(state: AgentState) -> dict:
+async def research_node(state: AgentState, config: RunnableConfig) -> dict:
     specialist = state.get("specialist") or "scientific"
     focus = SPECIALIST_FOCUS.get(specialist, "")
     search_q = f"{state['query']} {focus}"
@@ -161,7 +158,7 @@ def route_after_collect(state: AgentState):
 
 # ── synthesize ────────────────────────────────────────────────────
 
-async def synthesize_node(state: AgentState) -> dict:
+async def synthesize_node(state: AgentState, config: RunnableConfig) -> dict:
     domain = state.get("domain") or "clinical"
     relevant_specs = SYNTHESIS_SPECIALISTS.get(domain, list(SPECIALISTS.keys()))
 
@@ -182,7 +179,7 @@ async def synthesize_node(state: AgentState) -> dict:
         )),
         HumanMessage(content=f"Query: {state['query']}\n\nResearch:\n{context}"),
     ]
-    resp = await _llm.ainvoke(messages)
+    resp = await _llm(config).ainvoke(messages)
 
     return {
         "syntheses": [{"domain": domain, "content": resp.content}],
@@ -198,7 +195,7 @@ async def synthesize_node(state: AgentState) -> dict:
 
 # ── fact_check ────────────────────────────────────────────────────
 
-async def fact_check_node(state: AgentState) -> dict:
+async def fact_check_node(state: AgentState, config: RunnableConfig) -> dict:
     synthesis_text = "\n\n".join(s["content"] for s in state["syntheses"])[:2000]
 
     messages = [
@@ -208,7 +205,7 @@ async def fact_check_node(state: AgentState) -> dict:
         )),
         HumanMessage(content=f"Query: {state['query']}\n\nSyntheses:\n{synthesis_text}"),
     ]
-    resp = await _llm.ainvoke(messages)
+    resp = await _llm(config).ainvoke(messages)
 
     return {
         "syntheses": [{"domain": "_fact_check", "content": resp.content}],
@@ -224,7 +221,7 @@ async def fact_check_node(state: AgentState) -> dict:
 
 # ── write ─────────────────────────────────────────────────────────
 
-async def write_node(state: AgentState) -> dict:
+async def write_node(state: AgentState, config: RunnableConfig) -> dict:
     is_complex = state.get("complexity") == "complex"
 
     if is_complex and state.get("syntheses"):
@@ -248,7 +245,7 @@ async def write_node(state: AgentState) -> dict:
         SystemMessage(content=system),
         HumanMessage(content=f"Query: {state['query']}\n\nResearch:\n{context}"),
     ]
-    resp = await _llm.ainvoke(messages)
+    resp = await _llm(config).ainvoke(messages)
 
     layer = 4 if is_complex else 2
     parent = "fact_check" if is_complex else "research"

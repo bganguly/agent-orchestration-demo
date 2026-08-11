@@ -1,11 +1,11 @@
 export async function POST(req: Request) {
-  const { query } = await req.json();
+  const { query, provider = "anthropic" } = await req.json();
   const backendUrl = process.env.BACKEND_URL ?? "http://localhost:8002";
 
   const res = await fetch(`${backendUrl}/api/agent/run`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, provider }),
   });
 
   return new Response(res.body, {

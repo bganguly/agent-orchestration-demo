@@ -6,6 +6,13 @@ import type { FlowNode } from "@/components/AgentGraph";
 
 const AgentGraph = dynamic(() => import("@/components/AgentGraph"), { ssr: false });
 
+type Provider = "anthropic" | "openai";
+
+const PROVIDER_LABELS: Record<Provider, { short: string; full: string }> = {
+  anthropic: { short: "Claude", full: "Anthropic" },
+  openai:    { short: "GPT",    full: "OpenAI" },
+};
+
 const EXAMPLE_QUERIES = [
   { label: "AI in drug discovery", query: "What is the impact of artificial intelligence on drug discovery and pharmaceutical development?" },
   { label: "Climate & food security", query: "How does climate change affect global food security and agricultural systems worldwide?" },
@@ -18,6 +25,7 @@ const SIMPLE_QUERIES = [
 ];
 
 export default function Home() {
+  const [provider, setProvider] = useState<Provider>("anthropic");
   const [query, setQuery] = useState("");
   const [flowNodes, setFlowNodes] = useState<FlowNode[]>([]);
   const [answer, setAnswer] = useState("");
@@ -49,7 +57,7 @@ export default function Home() {
       const res = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q }),
+        body: JSON.stringify({ query: q, provider }),
         signal: abortRef.current.signal,
       });
 
@@ -114,13 +122,31 @@ export default function Home() {
             LangGraph · Multi-agent research · MCP server
           </h1>
         </div>
-        <a
-          href="/api-explorer.html"
-          target="_blank"
-          style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)", color: "var(--text-2)", textDecoration: "none" }}
-        >
-          API Explorer ↗
-        </a>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 10, fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-2)" }}>
+            Provider
+          </span>
+          {(["anthropic", "openai"] as Provider[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => setProvider(p)}
+              style={{
+                fontSize: 11,
+                padding: "4px 10px",
+                borderRadius: 6,
+                border: `1px solid ${provider === p ? "var(--accent)" : "var(--border)"}`,
+                background: provider === p ? "var(--accent)" : "transparent",
+                color: provider === p ? "#fff" : "var(--text-2)",
+                cursor: "pointer",
+                fontFamily: "monospace",
+                transition: "all 0.15s ease",
+              }}
+            >
+              {PROVIDER_LABELS[p].full}
+            </button>
+          ))}
+        </div>
       </header>
 
       {/* Input bar */}
@@ -163,7 +189,6 @@ export default function Home() {
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
         {/* DAG canvas */}
         <div style={{ flex: "0 0 62%", position: "relative", borderRight: "1px solid var(--border)" }}>
-          {/* Status bar */}
           {totalCount > 0 && (
             <div style={{ position: "absolute", top: 10, left: 12, zIndex: 10, fontSize: 10, fontFamily: "monospace", color: "var(--text-2)", background: "var(--surface)", padding: "3px 8px", borderRadius: 4, border: "1px solid var(--border)" }}>
               {running ? `${doneCount} / ${totalCount} agents done` : `${totalCount} agents · complete`}
