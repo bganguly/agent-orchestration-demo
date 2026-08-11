@@ -225,21 +225,45 @@ upsert_secret agent-openai-key    "${OPENAI_API_KEY:-}"
 
 # ── build images via Cloud Build ──────────────────────────────────────────────
 _cloudbuild_submit() {
-  local tag="$1" project="$2" srcdir="$3"
+  local tag="$1" project="$2" srcdir="$3" label="${4:-image}"
+  local logfile; logfile=$(mktemp)
   local attempt=0
+
   while (( attempt < 3 )); do
     attempt=$(( attempt + 1 ))
+    local t0=$SECONDS
+
+    printf '  [%s] submitting build (attempt %d/3)...\n' "$label" "$attempt"
+
     set +e
-    gcloud builds submit --tag "$tag" --project "$project" "$srcdir"
-    local rc=$?
+    gcloud builds submit --tag "$tag" --project "$project" "$srcdir" \
+      >"$logfile" 2>&1 &
+    local _pid=$!
+
+    while kill -0 "$_pid" 2>/dev/null; do
+      sleep 3
+      printf '\r  [%s] building... %ds elapsed   ' "$label" "$(( SECONDS - t0 ))"
+    done
+    wait "$_pid"; local rc=$?
+    printf '\n'
     set -e
-    [[ "$rc" == "0" ]] && return 0
-    [[ "$rc" == "130" ]] && { printf '\n[deploy] Build cancelled.\n'; exit 130; }
+
+    local elapsed=$(( SECONDS - t0 ))
+    if [[ "$rc" == "0" ]]; then
+      printf '  [%s] done (%ds)\n' "$label" "$elapsed"
+      rm -f "$logfile"; return 0
+    fi
+
+    [[ "$rc" == "130" ]] && { printf '\n[deploy] cancelled.\n'; rm -f "$logfile"; exit 130; }
+
+    printf '  [%s] FAILED after %ds — last 15 lines:\n' "$label" "$elapsed"
+    tail -15 "$logfile"
     if (( attempt < 3 )); then
-      printf '  Cloud Build submit failed (attempt %d/3) — waiting 20s...\n' "$attempt"
-      sleep 20
+      printf '  retrying in 20s...\n'; sleep 20
     fi
   done
+
+  rm -f "$logfile"
   printf '[deploy] Cloud Build failed after 3 attempts.\n' >&2
   return 1
 }
@@ -255,7 +279,7 @@ if _ar_tag_exists "$BACKEND_SVC" "$TAG"; then
   printf '\n[1/2] backend image %s already in AR — skipping build.\n' "$TAG"
 else
   printf '\n[1/2] building backend via Cloud Build...\n'
-  _cloudbuild_submit "$BACKEND_IMAGE" "$GCP_PROJECT" "$ROOT/backend"
+  _cloudbuild_submit "$BACKEND_IMAGE" "$GCP_PROJECT" "$ROOT/backend" "backend"
 fi
 
 _STEP="build frontend"
@@ -263,7 +287,7 @@ if _ar_tag_exists "$FRONTEND_SVC" "$TAG"; then
   printf '\n[2/2] frontend image %s already in AR — skipping build.\n' "$TAG"
 else
   printf '\n[2/2] building frontend via Cloud Build...\n'
-  _cloudbuild_submit "$FRONTEND_IMAGE" "$GCP_PROJECT" "$ROOT/frontend"
+  _cloudbuild_submit "$FRONTEND_IMAGE" "$GCP_PROJECT" "$ROOT/frontend" "frontend"
 fi
 
 _GKE_ZONE="${GCP_REGION}-a"
