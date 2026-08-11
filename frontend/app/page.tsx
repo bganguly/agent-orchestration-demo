@@ -31,19 +31,33 @@ export default function Home() {
   const [answer, setAnswer] = useState("");
   const [running, setRunning] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const seqRef = useRef(0);
 
   function reset() {
     setFlowNodes([]);
     setAnswer("");
+    seqRef.current = 0;
   }
 
-  function upsertNode(partial: Partial<FlowNode> & { id: string }) {
+  function upsertNode(partial: Omit<Partial<FlowNode>, "seq"> & { id: string }) {
     setFlowNodes((prev) => {
       const existing = prev.find((n) => n.id === partial.id);
       if (existing) {
         return prev.map((n) => (n.id === partial.id ? { ...n, ...partial } : n));
       }
-      return [...prev, { label: partial.label ?? partial.id, layer: partial.layer ?? 0, parent: partial.parent ?? null, status: partial.status ?? "running", ...partial }];
+      seqRef.current += 1;
+      const seq = seqRef.current;
+      return [
+        ...prev,
+        {
+          label: partial.label ?? partial.id,
+          layer: partial.layer ?? 0,
+          parent: partial.parent ?? null,
+          status: partial.status ?? "running",
+          seq,
+          ...partial,
+        } as FlowNode,
+      ];
     });
   }
 
