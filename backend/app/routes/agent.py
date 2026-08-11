@@ -56,61 +56,65 @@ async def run_agent(req: RunRequest) -> StreamingResponse:
         }
         config = {"configurable": {"llm": llm}}
 
-        async for event in graph.astream_events(state, config=config, version="v2"):
-            kind = event.get("event")
-            name = event.get("name", "")
+        try:
+            async for event in graph.astream_events(state, config=config, version="v2"):
+                kind = event.get("event")
+                name = event.get("name", "")
 
-            if name not in KNOWN_NODES or name in HIDDEN_NODES:
-                continue
-            if kind not in ("on_chain_start", "on_chain_end"):
-                continue
+                if name not in KNOWN_NODES or name in HIDDEN_NODES:
+                    continue
+                if kind not in ("on_chain_start", "on_chain_end"):
+                    continue
 
-            data = event.get("data", {}) or {}
+                data = event.get("data", {}) or {}
 
-            if kind == "on_chain_start":
-                inp = (data.get("input") or {})
+                if kind == "on_chain_start":
+                    inp = (data.get("input") or {})
 
-                if name == "plan":
-                    yield _sse({"type": "step_start", "node": "plan",
-                                "label": "Planner", "layer": 0, "parent": None})
+                    if name == "plan":
+                        yield _sse({"type": "step_start", "node": "plan",
+                                    "label": "Planner", "layer": 0, "parent": None})
 
-                elif name == "research":
-                    sp = inp.get("specialist") or "scientific"
-                    yield _sse({"type": "step_start",
-                                "node": f"research:{sp}",
-                                "label": SPECIALISTS.get(sp, sp),
-                                "layer": 1, "parent": "plan"})
+                    elif name == "research":
+                        sp = inp.get("specialist") or "scientific"
+                        yield _sse({"type": "step_start",
+                                    "node": f"research:{sp}",
+                                    "label": SPECIALISTS.get(sp, sp),
+                                    "layer": 1, "parent": "plan"})
 
-                elif name == "synthesize":
-                    dom = inp.get("domain") or "clinical"
-                    yield _sse({"type": "step_start",
-                                "node": f"synthesize:{dom}",
-                                "label": SYNTHESIS_DOMAINS.get(dom, dom),
-                                "layer": 2, "parent": "research"})
+                    elif name == "synthesize":
+                        dom = inp.get("domain") or "clinical"
+                        yield _sse({"type": "step_start",
+                                    "node": f"synthesize:{dom}",
+                                    "label": SYNTHESIS_DOMAINS.get(dom, dom),
+                                    "layer": 2, "parent": "research"})
 
-                elif name == "fact_check":
-                    yield _sse({"type": "step_start", "node": "fact_check",
-                                "label": "Fact Check", "layer": 3, "parent": "synthesize"})
+                    elif name == "fact_check":
+                        yield _sse({"type": "step_start", "node": "fact_check",
+                                    "label": "Fact Check", "layer": 3, "parent": "synthesize"})
 
-                elif name == "write":
-                    complexity = inp.get("complexity", "simple")
-                    is_complex = complexity == "complex"
-                    yield _sse({"type": "step_start", "node": "write",
-                                "label": "Report Writer",
-                                "layer": 4 if is_complex else 2,
-                                "parent": "fact_check" if is_complex else "research"})
+                    elif name == "write":
+                        complexity = inp.get("complexity", "simple")
+                        is_complex = complexity == "complex"
+                        yield _sse({"type": "step_start", "node": "write",
+                                    "label": "Report Writer",
+                                    "layer": 4 if is_complex else 2,
+                                    "parent": "fact_check" if is_complex else "research"})
 
-            elif kind == "on_chain_end":
-                out = (data.get("output") or {})
-                steps = out.get("steps", []) if isinstance(out, dict) else []
+                elif kind == "on_chain_end":
+                    out = (data.get("output") or {})
+                    steps = out.get("steps", []) if isinstance(out, dict) else []
 
-                if steps:
-                    yield _sse({"type": "step_done", **steps[0]})
+                    if steps:
+                        yield _sse({"type": "step_done", **steps[0]})
 
-                if name == "write":
-                    answer = out.get("answer", "") if isinstance(out, dict) else ""
-                    if answer:
-                        yield _sse({"type": "answer", "text": answer})
+                    if name == "write":
+                        answer = out.get("answer", "") if isinstance(out, dict) else ""
+                        if answer:
+                            yield _sse({"type": "answer", "text": answer})
+
+        except Exception as exc:
+            yield _sse({"type": "error", "text": f"Pipeline error: {exc}"})
 
         yield "data: [DONE]\n\n"
 

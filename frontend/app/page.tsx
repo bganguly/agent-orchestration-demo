@@ -52,6 +52,7 @@ export default function Home() {
     reset();
     setRunning(true);
     abortRef.current = new AbortController();
+    let gotOutput = false;
 
     try {
       const res = await fetch("/api/agent", {
@@ -86,7 +87,11 @@ export default function Home() {
             } else if (ev.type === "step_done") {
               upsertNode({ id: ev.node, label: ev.label, layer: ev.layer, parent: ev.parent, status: "done", detail: ev.detail });
             } else if (ev.type === "answer") {
+              gotOutput = true;
               setAnswer(ev.text);
+            } else if (ev.type === "error") {
+              gotOutput = true;
+              setAnswer(`Error: ${ev.text}`);
             }
           } catch {
             // malformed line
@@ -95,9 +100,13 @@ export default function Home() {
       }
     } catch (err: unknown) {
       if (err instanceof Error && err.name !== "AbortError") {
+        gotOutput = true;
         setAnswer("Error: could not reach the agent backend.");
       }
     } finally {
+      if (!gotOutput && !abortRef.current?.signal.aborted) {
+        setAnswer("Error: pipeline returned no output — check API key configuration.");
+      }
       setRunning(false);
     }
   }
