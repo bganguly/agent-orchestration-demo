@@ -123,27 +123,23 @@ export default function Home() {
           </h1>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 10, fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-2)" }}>
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          <span className="hidden sm:inline text-xs font-mono uppercase tracking-wider" style={{ color: "var(--text-2)" }}>
             Provider
           </span>
           {(["anthropic", "openai"] as Provider[]).map((p) => (
             <button
               key={p}
               onClick={() => setProvider(p)}
+              className="px-2 sm:px-3 py-1 rounded text-[10px] sm:text-xs font-mono transition-colors"
               style={{
-                fontSize: 11,
-                padding: "4px 10px",
-                borderRadius: 6,
-                border: `1px solid ${provider === p ? "var(--accent)" : "var(--border)"}`,
-                background: provider === p ? "var(--accent)" : "transparent",
+                background: provider === p ? "var(--accent)" : "var(--bg)",
                 color: provider === p ? "#fff" : "var(--text-2)",
-                cursor: "pointer",
-                fontFamily: "monospace",
-                transition: "all 0.15s ease",
+                border: `1px solid ${provider === p ? "var(--accent)" : "var(--border)"}`,
               }}
             >
-              {PROVIDER_LABELS[p].full}
+              <span className="sm:hidden">{PROVIDER_LABELS[p].short}</span>
+              <span className="hidden sm:inline">{PROVIDER_LABELS[p].full}</span>
             </button>
           ))}
         </div>

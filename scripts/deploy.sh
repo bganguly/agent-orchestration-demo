@@ -217,30 +217,11 @@ function upsert_secret() {
 }
 
 [[ -f "$ROOT/.env" ]] && source "$ROOT/.env"
-printf '\n=== LLM provider ===\n'
-_CUR_PROVIDER="${LLM_PROVIDER:-anthropic}"
-printf '  [A] Anthropic  [O] OpenAI  [current: %s]: ' "$_CUR_PROVIDER"
-read -r _P
-case "${_P:-}" in
-  [Oo]*) LLM_PROVIDER="openai" ;;
-  [Aa]*) LLM_PROVIDER="anthropic" ;;
-  *)     LLM_PROVIDER="$_CUR_PROVIDER" ;;
-esac
-export LLM_PROVIDER
-printf '  Using provider: %s\n' "$LLM_PROVIDER"
-
-printf '\n=== API key ===\n'
-if [[ "$LLM_PROVIDER" == "openai" ]]; then
-  prompt_secret OPENAI_API_KEY "sk-…  (required)"
-  upsert_secret agent-openai-key "${OPENAI_API_KEY:-}"
-  _PROVIDER_KEY=$(gcloud secrets versions access latest --secret=agent-openai-key --project="$GCP_PROJECT" 2>/dev/null || echo "")
-  _PROVIDER_ENV="OPENAI_API_KEY=${_PROVIDER_KEY},ANTHROPIC_API_KEY="
-else
-  prompt_secret ANTHROPIC_API_KEY "sk-ant-…  (required)"
-  upsert_secret agent-anthropic-key "${ANTHROPIC_API_KEY:-}"
-  _PROVIDER_KEY=$(gcloud secrets versions access latest --secret=agent-anthropic-key --project="$GCP_PROJECT" 2>/dev/null || echo "")
-  _PROVIDER_ENV="ANTHROPIC_API_KEY=${_PROVIDER_KEY},OPENAI_API_KEY="
-fi
+printf '\n=== API keys ===\n'
+prompt_secret ANTHROPIC_API_KEY "sk-ant-…  (required)"
+prompt_secret OPENAI_API_KEY    "sk-…      (optional, press enter to skip)"
+upsert_secret agent-anthropic-key "${ANTHROPIC_API_KEY:-}"
+upsert_secret agent-openai-key    "${OPENAI_API_KEY:-}"
 
 # ── build images via Cloud Build ──────────────────────────────────────────────
 _cloudbuild_submit() {
@@ -342,7 +323,13 @@ else
     --region="$GCP_REGION" \
     --project="$GCP_PROJECT" \
     --service-account="$SA_EMAIL" \
-    --set-env-vars="${_PROVIDER_ENV},CORS_ORIGINS=*" \
+    --set-secrets="$(
+        _S="ANTHROPIC_API_KEY=agent-anthropic-key:latest"
+        gcloud secrets describe agent-openai-key --project="$GCP_PROJECT" &>/dev/null \
+          && _S="${_S},OPENAI_API_KEY=agent-openai-key:latest"
+        printf '%s' "$_S"
+      )" \
+    --set-env-vars="CORS_ORIGINS=*" \
     --allow-unauthenticated \
     --min-instances=0 \
     --timeout=300 \
@@ -387,7 +374,6 @@ GCP_PROJECT=${GCP_PROJECT}
 GCP_REGION=${GCP_REGION}
 AR_REPO=${AR_REPO}
 BACKEND_RUNTIME=${BACKEND_RUNTIME}
-LLM_PROVIDER=${LLM_PROVIDER}
 BACKEND_URL=${BACKEND_URL}
 FRONTEND_URL=${FRONTEND_URL}
 ENVEOF
