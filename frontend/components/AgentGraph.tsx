@@ -326,7 +326,7 @@ export default function AgentGraph({ flowNodes }: { flowNodes: FlowNode[] }) {
         nodes={rfNodes}
         edges={buildEdges(flowNodes)}
         nodeTypes={nodeTypes}
-        defaultViewport={{ x: 40, y: 15, zoom: 0.55 }}
+        defaultViewport={{ x: -214, y: 0, zoom: 0.9 }}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
