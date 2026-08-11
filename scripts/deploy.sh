@@ -174,6 +174,31 @@ gcloud projects add-iam-policy-binding "$GCP_PROJECT" \
 
 # ── API key secrets ───────────────────────────────────────────────────────────
 _STEP="secrets"
+
+prompt_secret() {
+  local key="$1" hint="$2"
+  local current="${!key:-}"
+  if [[ -n "$current" ]]; then
+    local masked="${current:0:8}…${current: -4}"
+    printf '  %s already set (%s) — use existing? [Y/n]: ' "$key" "$masked"
+    read -r _yn
+    [[ "${_yn:-Y}" =~ ^[Nn] ]] || return 0
+  fi
+  printf '  %s (%s): ' "$key" "$hint"
+  read -rs _val
+  echo
+  if [[ -z "$_val" ]]; then
+    printf '  Skipping %s (empty).\n' "$key"; return
+  fi
+  eval "export $key=\"\$_val\""
+  touch "$ROOT/.env"
+  if grep -q "^${key}=" "$ROOT/.env" 2>/dev/null; then
+    sed -i '' "s|^${key}=.*|${key}=${_val}|" "$ROOT/.env"
+  else
+    printf '%s=%s\n' "$key" "$_val" >> "$ROOT/.env"
+  fi
+}
+
 function upsert_secret() {
   local NAME="$1" VALUE="$2"
   [[ -z "$VALUE" ]] && return
@@ -190,7 +215,11 @@ function upsert_secret() {
       --member="serviceAccount:${SA_EMAIL}" --role="roles/secretmanager.secretAccessor" --quiet 2>/dev/null || true
   fi
 }
+
 [[ -f "$ROOT/.env" ]] && source "$ROOT/.env"
+printf '\n=== API keys ===\n'
+prompt_secret ANTHROPIC_API_KEY "sk-ant-…  (required)"
+prompt_secret OPENAI_API_KEY    "sk-…      (optional, press enter to skip)"
 upsert_secret agent-anthropic-key "${ANTHROPIC_API_KEY:-}"
 upsert_secret agent-openai-key    "${OPENAI_API_KEY:-}"
 
