@@ -35,7 +35,7 @@ def _make_llm(provider: str):
     key = settings.anthropic_api_key
     log.info("[llm] creating ChatAnthropic key=%s", _mask(key))
     return ChatAnthropic(
-        model="claude-3-5-haiku-20241022",
+        model="claude-haiku-4-5-20251001",
         anthropic_api_key=key,
         max_tokens=1024,
     )
