@@ -1,4 +1,5 @@
 import json
+import logging
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
@@ -10,21 +11,32 @@ from app.agents.graph import graph, SPECIALISTS, SYNTHESIS_DOMAINS
 from app.config import settings
 
 router = APIRouter()
+log = logging.getLogger("agent.route")
 
 HIDDEN_NODES = {"collect"}
 KNOWN_NODES = {"plan", "research", "collect", "synthesize", "fact_check", "write"}
 
 
+def _mask(val: str) -> str:
+    if not val:
+        return "<EMPTY>"
+    return val[:8] + "…" + val[-4:]
+
+
 def _make_llm(provider: str):
     if provider == "openai":
+        key = settings.openai_api_key
+        log.info("[llm] creating ChatOpenAI  key=%s", _mask(key))
         return ChatOpenAI(
             model="gpt-4o-mini",
-            openai_api_key=settings.openai_api_key,
+            openai_api_key=key,
             max_tokens=1024,
         )
+    key = settings.anthropic_api_key
+    log.info("[llm] creating ChatAnthropic key=%s", _mask(key))
     return ChatAnthropic(
         model="claude-3-5-haiku-20241022",
-        anthropic_api_key=settings.anthropic_api_key,
+        anthropic_api_key=key,
         max_tokens=1024,
     )
 
@@ -40,6 +52,7 @@ class RunRequest(BaseModel):
 
 @router.post("/agent/run")
 async def run_agent(req: RunRequest) -> StreamingResponse:
+    log.info("[request] provider=%s query=%r", req.provider, req.query[:80])
     llm = _make_llm(req.provider)
 
     async def event_stream():
@@ -56,6 +69,7 @@ async def run_agent(req: RunRequest) -> StreamingResponse:
         }
         config = {"configurable": {"llm": llm}}
 
+        log.info("[stream] starting graph with provider=%s", req.provider)
         try:
             async for event in graph.astream_events(state, config=config, version="v2"):
                 kind = event.get("event")
@@ -65,6 +79,8 @@ async def run_agent(req: RunRequest) -> StreamingResponse:
                     continue
                 if kind not in ("on_chain_start", "on_chain_end"):
                     continue
+
+                log.info("[event] %s %s", kind, name)
 
                 data = event.get("data", {}) or {}
 
@@ -114,8 +130,10 @@ async def run_agent(req: RunRequest) -> StreamingResponse:
                             yield _sse({"type": "answer", "text": answer})
 
         except Exception as exc:
+            log.exception("[stream] pipeline exception: %s", exc)
             yield _sse({"type": "error", "text": f"Pipeline error: {exc}"})
 
+        log.info("[stream] done")
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

@@ -8,6 +8,7 @@ Flow (simple):
 """
 
 import json
+import logging
 import operator
 from typing import Annotated, Any
 
@@ -18,6 +19,8 @@ from langgraph.types import Send
 from typing_extensions import TypedDict
 
 from app.agents.tools import wikipedia_search, duckduckgo_search
+
+log = logging.getLogger("agent.graph")
 
 SPECIALISTS: dict[str, str] = {
     "clinical":     "Clinical & Medical",
@@ -73,12 +76,15 @@ class AgentState(TypedDict):
 
 
 def _llm(config: RunnableConfig):
-    return config["configurable"]["llm"]
+    llm = config["configurable"].get("llm")
+    log.info("[_llm] resolved: %s", type(llm).__name__ if llm else "NONE")
+    return llm
 
 
 # ── plan ──────────────────────────────────────────────────────────
 
 async def plan_node(state: AgentState, config: RunnableConfig) -> dict:
+    log.info("[plan] start query=%r", state["query"][:80])
     prompt = f"""Analyze this research query and respond with JSON only.
 
 Query: {state['query']}
@@ -100,9 +106,11 @@ Respond with ONLY valid JSON — no markdown, no explanation:
         if not specialists:
             specialists = ["scientific", "historical"]
     except (ValueError, json.JSONDecodeError):
+        log.warning("[plan] failed to parse LLM JSON, raw=%r", resp.content[:200])
         complexity = "simple"
         specialists = ["scientific", "historical"]
 
+    log.info("[plan] done complexity=%s specialists=%s", complexity, specialists)
     return {
         "complexity": complexity,
         "specialists": specialists,
@@ -126,11 +134,13 @@ def route_after_plan(state: AgentState):
 
 async def research_node(state: AgentState, config: RunnableConfig) -> dict:
     specialist = state.get("specialist") or "scientific"
+    log.info("[research] start specialist=%s", specialist)
     focus = SPECIALIST_FOCUS.get(specialist, "")
     search_q = f"{state['query']} {focus}"
 
     wiki, ddgo = await wikipedia_search(search_q), await duckduckgo_search(search_q)
     content = f"[Wikipedia]\n{wiki}\n\n[Web]\n{ddgo}"
+    log.info("[research] done specialist=%s words=%d", specialist, len(content.split()))
 
     return {
         "research_results": [{"specialist": specialist, "content": content}],
@@ -160,6 +170,7 @@ def route_after_collect(state: AgentState):
 
 async def synthesize_node(state: AgentState, config: RunnableConfig) -> dict:
     domain = state.get("domain") or "clinical"
+    log.info("[synthesize] start domain=%s", domain)
     relevant_specs = SYNTHESIS_SPECIALISTS.get(domain, list(SPECIALISTS.keys()))
 
     relevant = [r for r in state["research_results"] if r["specialist"] in relevant_specs]
@@ -181,6 +192,7 @@ async def synthesize_node(state: AgentState, config: RunnableConfig) -> dict:
     ]
     resp = await _llm(config).ainvoke(messages)
 
+    log.info("[synthesize] done domain=%s", domain)
     return {
         "syntheses": [{"domain": domain, "content": resp.content}],
         "steps": [{
@@ -196,6 +208,7 @@ async def synthesize_node(state: AgentState, config: RunnableConfig) -> dict:
 # ── fact_check ────────────────────────────────────────────────────
 
 async def fact_check_node(state: AgentState, config: RunnableConfig) -> dict:
+    log.info("[fact_check] start syntheses=%d", len(state["syntheses"]))
     synthesis_text = "\n\n".join(s["content"] for s in state["syntheses"])[:2000]
 
     messages = [
@@ -223,6 +236,7 @@ async def fact_check_node(state: AgentState, config: RunnableConfig) -> dict:
 
 async def write_node(state: AgentState, config: RunnableConfig) -> dict:
     is_complex = state.get("complexity") == "complex"
+    log.info("[write] start complexity=%s", state.get("complexity"))
 
     if is_complex and state.get("syntheses"):
         context = "\n\n".join(
@@ -250,6 +264,7 @@ async def write_node(state: AgentState, config: RunnableConfig) -> dict:
     layer = 4 if is_complex else 2
     parent = "fact_check" if is_complex else "research"
 
+    log.info("[write] done answer_len=%d", len(resp.content))
     return {
         "answer": resp.content,
         "steps": [{
