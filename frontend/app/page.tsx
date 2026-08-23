@@ -3,7 +3,6 @@
 import { useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import type { FlowNode } from "@/components/AgentGraph";
-import BackToPortfolio from "@/components/BackToPortfolio";
 
 const AgentGraph = dynamic(() => import("@/components/AgentGraph"), { ssr: false });
 
@@ -33,6 +32,19 @@ export default function Home() {
   const [running, setRunning] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const seqRef = useRef(0);
+
+  const PORTFOLIO_URL = 'https://bganguly.github.io/#multi_agent';
+  function handleBack(e: React.MouseEvent<HTMLAnchorElement>) {
+    e.preventDefault();
+    try {
+      if (window.opener && !window.opener.closed) {
+        window.opener.location.href = PORTFOLIO_URL;
+        window.close();
+        return;
+      }
+    } catch (_) {}
+    window.location.href = PORTFOLIO_URL;
+  }
 
   function reset() {
     setFlowNodes([]);
@@ -136,10 +148,16 @@ export default function Home() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
-      <BackToPortfolio />
       {/* Header */}
       <header style={{ padding: "10px 20px", borderBottom: "1px solid var(--border)", background: "var(--surface)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
+          <a
+            href={PORTFOLIO_URL}
+            onClick={handleBack}
+            style={{ fontSize: 10, color: "var(--text-2)", textDecoration: "none", display: "block", marginBottom: 4, transition: "color 0.15s" }}
+            onMouseEnter={e => (e.currentTarget.style.color = "var(--accent)")}
+            onMouseLeave={e => (e.currentTarget.style.color = "var(--text-2)")}
+          >← Portfolio</a>
           <span style={{ fontSize: 10, fontFamily: "monospace", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--accent)" }}>
             Agent Orchestration Demo
           </span>
