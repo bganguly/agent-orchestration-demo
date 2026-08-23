@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import type { FlowNode } from "@/components/AgentGraph";
+import BackToPortfolio from "@/components/BackToPortfolio";
 
 const AgentGraph = dynamic(() => import("@/components/AgentGraph"), { ssr: false });
 
@@ -135,6 +136,7 @@ export default function Home() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      <BackToPortfolio />
       {/* Header */}
       <header style={{ padding: "10px 20px", borderBottom: "1px solid var(--border)", background: "var(--surface)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
