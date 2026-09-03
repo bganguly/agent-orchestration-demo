@@ -6,7 +6,7 @@ domain synthesizers and a fact-check node before producing a structured report. 
 the browser as SSE events so you can watch the agent pipeline execute in real time. The same tools are also
 exposed as an **MCP server** over stdio — connectable from Claude Desktop, Claude Code, or any MCP-compatible client.
 
-**[→ Portfolio demo](https://bganguly.github.io/?open=agent)**
+**[→ Portfolio demo](https://bganguly.github.io/#multi_agent)**
 
 ---
 
@@ -215,7 +215,7 @@ curl -X POST http://localhost:8002/api/agent/run \
 
 ## Live Services
 
-> **Schedule:** ECS Fargate runs weekdays 8 am – 5 pm PT. Outside those hours the app is offline — [request access](https://bganguly.github.io/?open=agent) for off-hours access.
+> **Schedule:** ECS Fargate runs weekdays 8 am – 5 pm PT. Outside those hours the app is offline — [request access](https://bganguly.github.io/#multi_agent) for off-hours access.
 
 | Service | Local | Cloud Run |
 |---|---|---|
