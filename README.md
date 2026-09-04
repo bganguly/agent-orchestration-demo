@@ -6,7 +6,17 @@ domain synthesizers and a fact-check node before producing a structured report. 
 the browser as SSE events so you can watch the agent pipeline execute in real time. The same tools are also
 exposed as an **MCP server** over stdio — connectable from Claude Desktop, Claude Code, or any MCP-compatible client.
 
-**[→ Portfolio demo](https://bganguly.github.io/#multi_agent)**
+---
+
+## Live Service
+
+| Endpoint | URL |
+|---|---|
+| **App** | https://agent-frontend-77y7e2wykq-uc.a.run.app |
+| **API** | available on demand |
+| **Portfolio demo** | https://bganguly.github.io/#multi_agent |
+
+> Cloud Run scales to zero when idle; first request may take ~5–10 s to wake.
 
 ---
 
