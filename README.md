@@ -146,20 +146,6 @@ sequenceDiagram
 
 ---
 
-## Deployment / Running
-
-```bash
-./scripts/deploy.sh      # local [1] or GCP Cloud Run / GKE [2]
-./scripts/infra-down.sh  # stop local [1] or delete Cloud Run services [--cloud]
-```
-
-Prerequisites for local: Python 3.12+, Node 20+. Copy `.env.example` → `.env` and fill in `ANTHROPIC_API_KEY`.
-Local Redis: `brew install redis && brew services start redis`, then set `REDIS_URL=redis://localhost:6379` in `.env`.
-
-Cloud Run deploy requires `gcloud` CLI authenticated (`gcloud auth login`) with a project set.
-
----
-
 ## Stack
 
 | Component | Implementation |
@@ -178,6 +164,20 @@ Cloud Run deploy requires `gcloud` CLI authenticated (`gcloud auth login`) with 
 | **Backend** | FastAPI 0.115 + asyncio; `graph.astream_events(version="v2")` drives the SSE stream |
 | **Frontend** | Next.js 15 App Router, React 19, TypeScript 5.7, Tailwind CSS; custom SSE consumer; deployed on GCP |
 | **IaC** | Terraform (`infra/aws/`) for ECS Fargate; `k8s/` manifests for GKE; `cloudbuild-gke.yaml` for Cloud Build |
+
+---
+
+## Deployment / Running
+
+```bash
+./scripts/deploy.sh      # local [1] or GCP Cloud Run / GKE [2]
+./scripts/infra-down.sh  # stop local [1] or delete Cloud Run services [--cloud]
+```
+
+Prerequisites for local: Python 3.12+, Node 20+. Copy `.env.example` → `.env` and fill in `ANTHROPIC_API_KEY`.
+Local Redis: `brew install redis && brew services start redis`, then set `REDIS_URL=redis://localhost:6379` in `.env`.
+
+Cloud Run deploy requires `gcloud` CLI authenticated (`gcloud auth login`) with a project set.
 
 ---
 
