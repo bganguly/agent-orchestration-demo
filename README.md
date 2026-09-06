@@ -61,39 +61,6 @@ To build on a prior answer, you must carry context forward in the question itsel
 
 ---
 
-## Running
-
-```bash
-./scripts/deploy.sh      # local [1] or GCP Cloud Run / GKE [2]
-./scripts/infra-down.sh  # stop local [1] or delete Cloud Run services [--cloud]
-```
-
-Prerequisites for local: Python 3.12+, Node 20+. Copy `.env.example` → `.env` and fill in `ANTHROPIC_API_KEY`.
-Local Redis: `brew install redis && brew services start redis`, then set `REDIS_URL=redis://localhost:6379` in `.env`.
-
-Cloud Run deploy requires `gcloud` CLI authenticated (`gcloud auth login`) with a project set.
-
----
-
-| Component | Implementation |
-|---|---|
-| **Orchestration** | LangGraph `StateGraph` with conditional edges; `Send` API for parallel fan-out to N `research` nodes and 4 `synthesize` nodes |
-| **Agent graph (simple)** | `plan` → `research` ×2–3 (parallel) → `collect` → `write` |
-| **Agent graph (complex)** | `plan` → `research` ×6–10 (parallel) → `collect` → `synthesize` ×4 (parallel) → `fact_check` → `write` |
-| **Specialists** | 10 lenses: Clinical, Economics, Regulatory, Technology, Ethics, Historical, Competitive, Scientific, Consumer, Geopolitical — planner selects the relevant subset per query |
-| **Synthesis domains** | 4 parallel synthesizers: Clinical & Scientific · Business & Economic · Policy & Regulatory · Societal Impact |
-| **Tools** | `wikipedia_search` (Wikipedia REST summary API) · `duckduckgo_search` (DuckDuckGo Instant Answers) — no API key required |
-| **MCP server** | `app/mcp/server.py` exposes both tools over stdio using the `mcp` Python SDK; connects to Claude Desktop / Claude Code via `claude_desktop_config.json` |
-| **LLM** | `claude-3-5-haiku-20241022` for all nodes (plan, research, synthesize, fact_check, write) |
-| **Streaming** | FastAPI `StreamingResponse` emits SSE: `step_start`, `step_done` (with detail), `answer`; Next.js API route proxies stream to browser |
-| **Step visibility** | `StepTracker` component renders each node live: pending → active (⟳) → done (✓) with detail text; `AgentGraph` renders the graph topology |
-| **Session state** | Redis 7 (`redis:7-alpine`) on `:6381` via Docker Compose — used for session coordination between frontend and backend |
-| **Backend** | FastAPI 0.115 + asyncio; `graph.astream_events(version="v2")` drives the SSE stream |
-| **Frontend** | Next.js 15 App Router, React 19, TypeScript 5.7, Tailwind CSS; custom SSE consumer; deployed on GCP |
-| **IaC** | Terraform (`infra/aws/`) for ECS Fargate; `k8s/` manifests for GKE; `cloudbuild-gke.yaml` for Cloud Build |
-
----
-
 ## Architecture
 
 ### Simple flow — step by step
@@ -176,6 +143,39 @@ sequenceDiagram
 | **No LLM caching** | Results should reflect the actual query each time; the same question about a topic that changed in Wikipedia should return fresh information |
 | **MCP reuse** | `app/mcp/server.py` wraps the same `wikipedia_search` and `duckduckgo_search` functions used by the graph nodes — one implementation, two entry points (graph + MCP) |
 | **`collect` as a hidden barrier** | The `collect` node is listed in `HIDDEN_NODES` in the route handler and emits no SSE events — it exists purely to let LangGraph synchronize parallel branches before the conditional edge fires |
+
+---
+
+## Running
+
+```bash
+./scripts/deploy.sh      # local [1] or GCP Cloud Run / GKE [2]
+./scripts/infra-down.sh  # stop local [1] or delete Cloud Run services [--cloud]
+```
+
+Prerequisites for local: Python 3.12+, Node 20+. Copy `.env.example` → `.env` and fill in `ANTHROPIC_API_KEY`.
+Local Redis: `brew install redis && brew services start redis`, then set `REDIS_URL=redis://localhost:6379` in `.env`.
+
+Cloud Run deploy requires `gcloud` CLI authenticated (`gcloud auth login`) with a project set.
+
+---
+
+| Component | Implementation |
+|---|---|
+| **Orchestration** | LangGraph `StateGraph` with conditional edges; `Send` API for parallel fan-out to N `research` nodes and 4 `synthesize` nodes |
+| **Agent graph (simple)** | `plan` → `research` ×2–3 (parallel) → `collect` → `write` |
+| **Agent graph (complex)** | `plan` → `research` ×6–10 (parallel) → `collect` → `synthesize` ×4 (parallel) → `fact_check` → `write` |
+| **Specialists** | 10 lenses: Clinical, Economics, Regulatory, Technology, Ethics, Historical, Competitive, Scientific, Consumer, Geopolitical — planner selects the relevant subset per query |
+| **Synthesis domains** | 4 parallel synthesizers: Clinical & Scientific · Business & Economic · Policy & Regulatory · Societal Impact |
+| **Tools** | `wikipedia_search` (Wikipedia REST summary API) · `duckduckgo_search` (DuckDuckGo Instant Answers) — no API key required |
+| **MCP server** | `app/mcp/server.py` exposes both tools over stdio using the `mcp` Python SDK; connects to Claude Desktop / Claude Code via `claude_desktop_config.json` |
+| **LLM** | `claude-3-5-haiku-20241022` for all nodes (plan, research, synthesize, fact_check, write) |
+| **Streaming** | FastAPI `StreamingResponse` emits SSE: `step_start`, `step_done` (with detail), `answer`; Next.js API route proxies stream to browser |
+| **Step visibility** | `StepTracker` component renders each node live: pending → active (⟳) → done (✓) with detail text; `AgentGraph` renders the graph topology |
+| **Session state** | Redis 7 (`redis:7-alpine`) on `:6381` via Docker Compose — used for session coordination between frontend and backend |
+| **Backend** | FastAPI 0.115 + asyncio; `graph.astream_events(version="v2")` drives the SSE stream |
+| **Frontend** | Next.js 15 App Router, React 19, TypeScript 5.7, Tailwind CSS; custom SSE consumer; deployed on GCP |
+| **IaC** | Terraform (`infra/aws/`) for ECS Fargate; `k8s/` manifests for GKE; `cloudbuild-gke.yaml` for Cloud Build |
 
 ---
 
