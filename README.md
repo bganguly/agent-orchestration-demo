@@ -146,7 +146,7 @@ sequenceDiagram
 
 ---
 
-## Running
+## Deployment / Running
 
 ```bash
 ./scripts/deploy.sh      # local [1] or GCP Cloud Run / GKE [2]
@@ -159,6 +159,8 @@ Local Redis: `brew install redis && brew services start redis`, then set `REDIS_
 Cloud Run deploy requires `gcloud` CLI authenticated (`gcloud auth login`) with a project set.
 
 ---
+
+## Stack
 
 | Component | Implementation |
 |---|---|
